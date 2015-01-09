@@ -33,6 +33,7 @@ const char *copyright = "2000-2007";
 const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
+#include "dirname.h"
 #include "netutils.h"
 #include "popen.h"
 #include "utils.h"
@@ -40,6 +41,10 @@ const char *email = "devel@monitoring-plugins.org";
 
 #define WARN_DUPLICATES "DUPLICATES FOUND! "
 #define UNKNOWN_TRIP_TIME -1.0	/* -1 seconds */
+#define PING_COMMAND "/bin/ping -n -U -w %d -c %d %s" /* path and args for ICMP ping command */
+#define PING_HAS_TIMEOUT 1 /* Define if ping has its own timeout option that should be set */
+#define PING_PACKETS_FIRST 1 /* Define if packet count must precede host */
+#define PING_COMMAND_SOURCE "/sbin/ping -S %s -n -c %d %s"
 
 enum {
 	UNKNOWN_PACKET_LOSS = 200,    /* 200% */
