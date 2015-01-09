@@ -1,9 +1,9 @@
 /*****************************************************************************
 * 
-* Nagios check_ping plugin
+* Monitoring check_ping plugin
 * 
 * License: GPL
-* Copyright (c) 2000-2014 Nagios Plugins Development Team
+* Copyright (c) 2000-2007 Monitoring Plugins Development Team
 * 
 * Description:
 * 
@@ -29,13 +29,14 @@
 *****************************************************************************/
 
 const char *progname = "check_ping";
-const char *copyright = "2000-2014";
-const char *email = "devel@nagios-plugins.org";
+const char *copyright = "2000-2007";
+const char *email = "devel@monitoring-plugins.org";
 
 #include "common.h"
 #include "netutils.h"
 #include "popen.h"
 #include "utils.h"
+#include "arpa/inet.h"
 
 #define WARN_DUPLICATES "DUPLICATES FOUND! "
 #define UNKNOWN_TRIP_TIME -1.0	/* -1 seconds */
@@ -59,6 +60,7 @@ int cpl = UNKNOWN_PACKET_LOSS;
 float wrta = UNKNOWN_TRIP_TIME;
 float crta = UNKNOWN_TRIP_TIME;
 char **addresses = NULL;
+char *source = NULL;
 int n_addresses = 0;
 int max_addr = 1;
 int max_packets = -1;
@@ -68,8 +70,6 @@ float rta = UNKNOWN_TRIP_TIME;
 int pl = UNKNOWN_PACKET_LOSS;
 
 char *warn_text;
-
-
 
 int
 main (int argc, char **argv)
@@ -88,7 +88,6 @@ main (int argc, char **argv)
 	addresses = malloc (sizeof(char*) * max_addr);
 	addresses[0] = NULL;
 
-	/* Parse extra opts if any */
 	argv=np_extra_opts (&argc, argv, progname);
 
 	if (process_arguments (argc, argv) == ERROR)
@@ -113,9 +112,12 @@ main (int argc, char **argv)
 		if (address_family != AF_INET && is_inet6_addr(addresses[i]))
 			rawcmd = strdup(PING6_COMMAND);
 		else
-			rawcmd = strdup(PING_COMMAND);
+			if (source == NULL)
+				rawcmd = strdup(PING_COMMAND);
+			else
+				rawcmd = strdup(PING_COMMAND_SOURCE);
 #else
-		rawcmd = strdup(PING_COMMAND);
+		rawcmd = strdup(PING_COMMAND_SOURCE);
 #endif
 
 		/* does the host address of number of packets argument come first? */
@@ -123,7 +125,7 @@ main (int argc, char **argv)
 # ifdef PING_HAS_TIMEOUT
 		xasprintf (&cmd, rawcmd, timeout_interval, max_packets, addresses[i]);
 # else
-		xasprintf (&cmd, rawcmd, max_packets, addresses[i]);
+		xasprintf (&cmd, rawcmd, source, max_packets, addresses[i]);
 # endif
 #else
 		xasprintf (&cmd, rawcmd, addresses[i], max_packets);
@@ -200,6 +202,7 @@ process_arguments (int argc, char **argv)
 		{"link", no_argument, 0, 'L'},
 		{"use-ipv4", no_argument, 0, '4'},
 		{"use-ipv6", no_argument, 0, '6'},
+		{"source", optional_argument, 0, 'S'},
 		{0, 0, 0, 0}
 	};
 
@@ -214,7 +217,7 @@ process_arguments (int argc, char **argv)
 	}
 
 	while (1) {
-		c = getopt_long (argc, argv, "VvhnL46t:c:w:H:p:", longopts, &option);
+		c = getopt_long (argc, argv, "VvhnL46t:c:w:H:p:S:", longopts, &option);
 
 		if (c == -1 || c == EOF)
 			break;
@@ -264,6 +267,14 @@ process_arguments (int argc, char **argv)
 					break;
 				}
 			}
+			break;
+		case 'S':	/* source address */
+			ptr = optarg;
+			source = ptr;
+			struct sockaddr_in sa;
+			char str[INET_ADDRSTRLEN];
+			if (inet_pton(AF_INET, source, &(sa.sin_addr)) != 0)
+				die (STATE_UNKNOWN, _("Bad local source\n"));
 			break;
 		case 'p':	/* number of packets to send */
 			if (is_intnonneg (optarg))
@@ -566,6 +577,7 @@ print_help (void)
 	printf (COPYRIGHT, copyright, email);
 
 	printf (_("Use ping to check connection statistics for a remote host."));
+	printf (" %s\n", "-S, --source=IP");
 
   printf ("\n\n");
 
@@ -608,6 +620,6 @@ void
 print_usage (void)
 {
   printf ("%s\n", _("Usage:"));
-	printf ("%s -H <host_address> -w <wrta>,<wpl>%% -c <crta>,<cpl>%%\n", progname);
+	printf ("%s -S <source_address> -H <host_address> -w <wrta>,<wpl>%% -c <crta>,<cpl>%%\n", progname);
   printf (" [-p packets] [-t timeout] [-4|-6]\n");
 }
